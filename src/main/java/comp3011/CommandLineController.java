@@ -30,6 +30,7 @@ public class CommandLineController {
     private boolean audioRequested;
     private boolean maximiseRequested;
     private Integer displayId;
+    private final List<FrameEffect> frameEffects = new ArrayList<>();
     private File videoFile;
     private String errorMessage;
 
@@ -68,6 +69,11 @@ public class CommandLineController {
         return maximiseRequested;
     }
 
+    // Frame effects in command-line order, including repeats.
+    public List<FrameEffect> getFrameEffects() {
+        return List.copyOf(frameEffects);
+    }
+
     public boolean shouldLaunchApplication() {
         return errorMessage == null && videoFile != null;
     }
@@ -75,18 +81,14 @@ public class CommandLineController {
     private void parse() {
         List<String> videoFiles = new ArrayList<>();
         for (String arg : args) {
-            if ("-h".equals(arg) || "--help".equals(arg)) {
-                helpRequested = true;
-            } else if ("-a".equals(arg) || "--audio".equals(arg)) {
-                audioRequested = true;
-            } else if ("-x".equals(arg) || "--maximise".equals(arg)) {
-                maximiseRequested = true;
-            } else if ("-1".equals(arg) || "--monitor-1".equals(arg)) {
-                setDisplayId(1);
-            } else if ("-2".equals(arg) || "--monitor-2".equals(arg)) {
-                setDisplayId(2);
-            } else if (arg.startsWith("-")) {
-                errorMessage = "Unknown option: " + arg;
+            if (arg.startsWith("--")) {
+                // Must be an actual word one
+                parseLongOption(arg);
+            } else if (arg.startsWith("-") && arg.length() > 1) {
+                // Single letter options may be stacked, so extract them if they are long
+                for (char option : arg.substring(1).toCharArray()) {
+                    parseShortOption(option, arg);
+                }
             } else {
                 videoFiles.add(arg);
             }
@@ -103,6 +105,50 @@ public class CommandLineController {
         } else {
             if (!helpRequested) {
                 errorMessage = "No video file specified.";
+            }
+        }
+    }
+
+    private void parseLongOption(String arg) {
+        if ("--help".equals(arg)) {
+            helpRequested = true;
+        } else if ("--audio".equals(arg)) {
+            audioRequested = true;
+        } else if ("--maximise".equals(arg)) {
+            maximiseRequested = true;
+        } else if ("--monitor-1".equals(arg)) {
+            setDisplayId(1);
+        } else if ("--monitor-2".equals(arg)) {
+            setDisplayId(2);
+        } else {
+            FrameEffect effect = FrameEffect.fromLong(arg);
+            if (effect != null) {
+                frameEffects.add(effect);
+            } else {
+                errorMessage = "Unknown option: " + arg;
+            }
+        }
+    }
+
+    private void parseShortOption(char option, String arg) {
+        if ("h".equals(arg)) {
+            helpRequested = true;
+        } else if ("a".equals(arg)) {
+            audioRequested = true;
+        } else if ("x".equals(arg)) {
+            maximiseRequested = true;
+        } else if ("1".equals(arg)) {
+            setDisplayId(1);
+        } else if ("2".equals(arg)) {
+            setDisplayId(2);
+        } else {
+            FrameEffect effect = FrameEffect.fromShort(option);
+            if (effect != null) {
+                frameEffects.add(effect);
+            } else if (arg.length() == 2) {
+                errorMessage = "Unknown option: " + arg;
+            } else {
+                errorMessage = "Unknown option: -" + option + " (in " + arg + ")";
             }
         }
     }
