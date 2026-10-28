@@ -41,14 +41,12 @@ public class FramePepperer extends FrameProcessor {
     private static final double MAX_BOUNDARY_WARP = 0.22;
     private static final int SEED_SALT = 0x50455050;
 
-    private static int nextInstanceIndex;
-
     private final int instanceIndex;
     private int mediaSeed;
 
-    public FramePepperer() {
+    public FramePepperer(int instanceIndex) {
         super();
-        instanceIndex = nextInstanceIndex++;
+        this.instanceIndex = instanceIndex;
     }
 
     @Override

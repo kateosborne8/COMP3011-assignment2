@@ -10,7 +10,7 @@
  */
 package comp3011;
 
-import java.util.function.Supplier;
+import java.util.function.IntFunction;
 
 /**
  * The frame processors selectable from the command line, each mapped to the object they create
@@ -22,23 +22,23 @@ import java.util.function.Supplier;
  * </p>
  */
 public enum FrameEffect {
-    NUMBER('n', "--number-frames", FrameNumberer::new),
+    NUMBER('n', "--number-frames", i -> new FrameNumberer()),
     SCRATCH('s', "--scratch-frames", FrameScratcher::new),
     FLICKER('f', "--flicker-frames", FrameFlickerer::new),
-    BLACK_AND_WHITE('w', "--black-and-white", FrameBlackAndWhiter::new),
-    YELLOW('y', "--yellow-frames", FrameYellower::new),
-    VIGNETTE('v', "--vignette-frames", FrameVignetter::new),
+    BLACK_AND_WHITE('w', "--black-and-white", i -> new FrameBlackAndWhiter()),
+    YELLOW('y', "--yellow-frames", i -> new FrameYellower()),
+    VIGNETTE('v', "--vignette-frames", i -> new FrameVignetter()),
     DUST('d', "--dust-frames", FrameDuster::new),
     JITTER('j', "--jitter-frames", FrameJitterer::new),
     MOTTLE('m', "--mottle-frames", FrameMottler::new),
-    BLEED('b', "--bleed-frames", FrameBleeder::new),
+    BLEED('b', "--bleed-frames", i -> new FrameBleeder()),
     PEPPER('p', "--pepper-frames", FramePepperer::new);
 
     private final char shortOption;
     private final String longOption;
-    private final Supplier<FrameProcessor> factory;
+    private final IntFunction<FrameProcessor> factory;
 
-    FrameEffect(char shortOption, String longOption, Supplier<FrameProcessor> factory) {
+    FrameEffect(char shortOption, String longOption, IntFunction<FrameProcessor> factory) {
         this.shortOption = shortOption;
         this.longOption = longOption;
         this.factory = factory;
@@ -52,8 +52,14 @@ public enum FrameEffect {
         return longOption;
     }
 
-    public FrameProcessor create() {
-        return factory.get();
+    /**
+     * Creates a processor for one slot of an effect chain.
+     *
+     * @param occurrence how many earlier chain entries used this same effect (0 for the first). It seeds the
+     *                   processor, so every chain built from the same list produces identical output.
+     */
+    public FrameProcessor create(int occurrence) {
+        return factory.apply(occurrence);
     }
 
     public static FrameEffect fromShort(char option) {

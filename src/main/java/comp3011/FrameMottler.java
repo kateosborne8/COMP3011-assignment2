@@ -54,8 +54,6 @@ public class FrameMottler extends FrameProcessor {
     private static final int MEDIUM_FIELD_SALT = 0x4d454449;
     private static final int LARGE_FIELD_SALT = 0x4c415247;
 
-    private static int nextInstanceIndex;
-
     private final int instanceIndex;
     private int mediaSeed;
     private int cachedDamageMaskSegment = Integer.MIN_VALUE;
@@ -72,9 +70,9 @@ public class FrameMottler extends FrameProcessor {
     private int blockGreenScaleIndex;
     private int blockRedScaleIndex;
 
-    public FrameMottler() {
+    public FrameMottler(int instanceIndex) {
         super();
-        instanceIndex = nextInstanceIndex++;
+        this.instanceIndex = instanceIndex;
     }
 
     @Override
