@@ -76,7 +76,8 @@ run on the JavaFX thread so they can't overlap.
 in the chain, and every worker builds the chain from the same list. It doesn't matter which worker gets a frame.
 
 **Errors and the end of the video.** An exception on another thread can't be caught by the JavaFX thread, so it is
-caught where it happens and passed through the queue and buffer as data, in order with the frames. The end of the
+caught where it happens (workers catch `Error`s too, such as a native library failing to load) and passed through the
+queue and buffer as data, in order with the frames. The end of the
 video works the same way, so the last frame is always shown first.
 
 **Shutdown.** Stop the decoder, then close the pipeline, then release audio and the grabber. All the waits can be
@@ -92,16 +93,16 @@ interrupted, and the threads are daemon threads in case something goes wrong.
 a deadlock fails the test instead of hanging.
 
 - `OrderedBufferTest`: order, window, slow frame, reset, stale results, close.
-- `FramePipelineTest`: order with random timing, errors, end of stream, reset, close.
+- `FramePipelineTest`: order with random timing, errors (including `Error`s), end of stream, reset, 300 rapid resets
+  with no stale frame, and close (including workers waiting on the window and an interrupted transformer).
 - `FrameProcessorDeterminismTest`: separate chains give the same output.
 - `CommandLineControllerTest`: argument parsing.
 
-A passing test doesn't prove there are no races, so these are backed up by the reasoning above and the LTS model.
+A passing test doesn't prove there are no races, so these are backed up by the reasoning above.
 
 ## Limitations
 
-- The LTS model (`docs/LTS.md`) only covers one seek. It doesn't include the window, pausing, errors or shutdown.
-- Still untested: lots of fast seeks under load, and the thread count going back down after stop.
+- Rapid seeks and closing the workers are tested on `FramePipeline` only. Nothing tests `VideoPlayerModel`
+  with the real grabber, because it needs JavaFX and a video file. Pausing under load is also untested.
+- If building a worker's effect chain throws, that worker dies before it takes a job and nothing reports it.
 - Toggling audio during playback can let one already-decoded chunk of audio through.
-
-More detail is in `docs/DESIGN.md` and `docs/LTS.md`.
