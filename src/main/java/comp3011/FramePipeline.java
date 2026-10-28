@@ -149,8 +149,17 @@ public final class FramePipeline<R> implements AutoCloseable {
         }
         try {
             return new Output<>(transformer.transform(job), false, null);
+        } catch (InterruptedException e) {
+            // Only close() interrupts a worker. The exception cleared the interrupt flag, so set it again: otherwise
+            // workerLoop would carry on and block in take() for good, and close() would give up waiting for us.
+            Thread.currentThread().interrupt();
+            return new Output<>(null, false, e);
         } catch (Exception e) {
             return new Output<>(null, false, e);
+        } catch (Error e) {
+            // For example an UnsatisfiedLinkError from the native libraries. An Error is not an Exception, so without
+            // this the worker would die and the displayer would wait forever for this frame. Report it instead.
+            return new Output<>(null, false, new RuntimeException(e));
         }
     }
 

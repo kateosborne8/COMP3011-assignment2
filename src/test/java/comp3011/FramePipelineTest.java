@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -71,12 +72,17 @@ class FramePipelineTest {
 
     @Test
     @Timeout(10)
-    @DisplayName("a transformer that throws is reported in order and does not hang the pipeline")
+    @DisplayName("an Exception or an Error from a transformer is reported in order and does not hang the pipeline")
     void failureIsDelivered() throws Exception {
-        try (FramePipeline<Integer> pipeline = new FramePipeline<>(3, 3, 2, () -> new FramePipeline.Transformer<>() {
+        // UnsatisfiedLinkError stands in for a native library problem in JavaCV. It is an Error, not an Exception,
+        // so it only gets reported if the worker catches Error as well.
+        try (FramePipeline<Integer> pipeline = new FramePipeline<>(3, 5, 5, () -> new FramePipeline.Transformer<>() {
             public Integer transform(FramePipeline.Job job) throws Exception {
-                if (job.sequence() == 2) {
+                if (job.sequence() == 1) {
                     throw new IllegalStateException("boom");
+                }
+                if (job.sequence() == 3) {
+                    throw new UnsatisfiedLinkError("native library missing");
                 }
                 return job.sequence();
             }
@@ -85,13 +91,16 @@ class FramePipelineTest {
             }
         })) {
             long gen = pipeline.generation();
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < 5; i++) {
                 pipeline.submit(job(i, gen));
             }
             assertEquals(0, awaitOutput(pipeline).value());
-            assertEquals(1, awaitOutput(pipeline).value());
-            FramePipeline.Output<Integer> failed = awaitOutput(pipeline);
-            assertEquals("boom", failed.failure().getMessage());
+            assertEquals("boom", awaitOutput(pipeline).failure().getMessage());
+            assertEquals(2, awaitOutput(pipeline).value());
+            FramePipeline.Output<Integer> failedWithError = awaitOutput(pipeline);
+            assertNotNull(failedWithError.failure(), "frame 3 must be reported as a failure, not lost");
+            assertTrue(failedWithError.failure().getMessage().contains("native library missing"));
+            assertEquals(4, awaitOutput(pipeline).value());
         }
     }
 
@@ -174,6 +183,72 @@ class FramePipelineTest {
         synchronized (workers) {
             for (Thread worker : workers) {
                 assertFalse(worker.isAlive(), worker.getName() + " should have exited");
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
+    @DisplayName("a transformer interrupted by close lets the worker exit without waiting for the shutdown timeout")
+    void interruptedTransformerDoesNotStallClose() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        AtomicReference<Thread> workerThread = new AtomicReference<>();
+        FramePipeline<Integer> pipeline = new FramePipeline<>(1, 3, 2, () -> new FramePipeline.Transformer<>() {
+            public Integer transform(FramePipeline.Job job) throws Exception {
+                workerThread.set(Thread.currentThread());
+                started.countDown();
+                Thread.sleep(30_000); // stands in for a long effect that gets interrupted by close()
+                return job.sequence();
+            }
+
+            public void close() {
+            }
+        });
+        pipeline.submit(job(0, pipeline.generation()));
+        assertTrue(started.await(5, TimeUnit.SECONDS));
+
+        long startNs = System.nanoTime();
+        pipeline.close();
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
+
+        assertFalse(workerThread.get().isAlive(), "the worker must have exited");
+        assertTrue(elapsedMs < 1_500, "close took " + elapsedMs + "ms, so it waited for the full shutdown timeout");
+    }
+
+    @Test
+    @Timeout(60)
+    @DisplayName("many rapid resets never let a frame from an old generation through")
+    void repeatedResetsNeverShowStaleFrames() throws Exception {
+        try (FramePipeline<Long> pipeline = new FramePipeline<>(3, 3, 2, () -> new FramePipeline.Transformer<>() {
+            public Long transform(FramePipeline.Job job) throws Exception {
+                Thread.sleep(ThreadLocalRandom.current().nextInt(3)); // so some frames are still in flight at reset
+                return job.generation() * 1_000_000L + job.sequence();
+            }
+
+            public void close() {
+            }
+        })) {
+            for (int seek = 0; seek < 300; seek++) {
+                long gen = pipeline.generation();
+                Thread producer = new Thread(() -> {
+                    try {
+                        for (int i = 0;; i++) {
+                            pipeline.submit(job(i, gen));
+                        }
+                    } catch (InterruptedException e) {
+                        // asked to stop, which is what the model does before a seek
+                    }
+                });
+                producer.start();
+
+                int framesShown = ThreadLocalRandom.current().nextInt(5);
+                for (int i = 0; i < framesShown; i++) {
+                    assertEquals(gen * 1_000_000L + i, awaitOutput(pipeline).value(), "seek " + seek + ", frame " + i);
+                }
+
+                producer.interrupt();
+                producer.join(); // the grabber must be idle before a reset, so the producer is stopped first
+                pipeline.reset();
             }
         }
     }
