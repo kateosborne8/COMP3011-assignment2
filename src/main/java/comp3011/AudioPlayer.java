@@ -31,6 +31,20 @@ import org.bytedeco.javacv.Frame;
  * {@link VideoPlayerModel} singleton schedules when the resulting audio is
  * written and owns the AudioPlayer.
  * </p>
+ *
+ * <p>
+ * Threading: this class has no locks, because its two halves use separate state and run on different threads.
+ * </p>
+ * <ul>
+ * <li>{@link #copySamples} and the scratch {@code outputBuffer} belong to the <b>decoder</b> thread. It returns a
+ * fresh array, so nothing is shared with the caller afterwards.</li>
+ * <li>{@link #open}, {@link #write}, {@link #flush} and {@link #close}, and the {@code line}, belong to the
+ * <b>JavaFX</b> thread.</li>
+ * </ul>
+ * <p>
+ * Do not make {@code copySamples} touch {@code line}, or {@code write} touch {@code outputBuffer}, without adding
+ * synchronisation. {@link VideoPlayerModel} only closes this object after the decoder thread has been joined.
+ * </p>
  */
 public class AudioPlayer implements AutoCloseable {
     private static final long WRITE_TRACE_THRESHOLD_NS = 2_000_000L;

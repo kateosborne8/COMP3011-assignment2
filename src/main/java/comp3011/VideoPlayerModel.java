@@ -53,9 +53,10 @@ public class VideoPlayerModel {
     private static final long NO_SEEK_REQUEST = -1; // Sentinel value used when no seek position is active.
     private static final long FIVE_SECONDS_US = 5_000_000L;
     private static final long AUDIO_LEAD_NS = 30_000_000L;
-    private static final int WORKER_COUNT = 6;
+    // Tuning values: change one at a time and compare the "Frame headroom" console output.
+    private static final int WORKER_COUNT = 6; // threads running the effect chain in parallel
     private static final int WINDOW = 6; // frames a worker may be ahead of the one being displayed
-    private static final int INPUT_QUEUE_CAPACITY = 5;
+    private static final int INPUT_QUEUE_CAPACITY = 5; // frames waiting for a worker; when full the decoder blocks
 
     private final List<FrameEffect> frameEffects;
     // Filled by the decoder thread, drained by the JavaFX thread.
@@ -167,6 +168,9 @@ public class VideoPlayerModel {
     }
 
     public void toggleAudioOutput() {
+        // Known benign race: the decoder may have checked audioOutputEnabled just before this flips it and then add one
+        // more chunk after the clear() below. If audio stays off, writeDueAudio discards it. If it is switched on again
+        // straight away, that one old chunk can play late. It is not worth a lock.
         audioOutputEnabled = !audioOutputEnabled;
         pendingAudio.clear();
         flushAudioOutput();

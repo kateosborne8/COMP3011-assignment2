@@ -28,6 +28,14 @@ import org.bytedeco.javacv.Frame;
  * conditions, frame overwrites or frame tearing etc. Some helper methods are provided
  * for this.
  * </p>
+ *
+ * <p>
+ * Threading: a processor instance is <b>not thread-safe</b> and does not need to be. Each worker thread builds its
+ * own chain of processors (see {@code VideoPlayerModel.createProcessorChain}), so an instance is only ever used by
+ * one thread and may keep scratch buffers in fields. Because of that, a processor must not use {@code static} mutable
+ * state, and must get its instance index from its constructor (see {@link FrameEffect#create}) rather than from a
+ * counter, so every worker's chain produces the same output.
+ * </p>
  */
 public abstract class FrameProcessor {
     protected InfoVideo videoInfo;

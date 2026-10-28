@@ -44,8 +44,14 @@ public class OrderedBuffer<T> {
     }
 
     /**
-     * The current generation. A worker reads this when it takes a frame from the input queue and passes it back to
-     * {@link #awaitSlot} and {@link #deliver}, so that work started before a seek can be recognised as stale.
+     * The current generation. The producer (the decoder thread's starter) reads this once, after any {@link #reset},
+     * and stamps every job it creates with it. The worker passes that stamp to {@link #awaitSlot} and
+     * {@link #deliver}, so work started before a seek can be recognised as stale.
+     *
+     * <p>
+     * A worker must not call this itself after taking a job. If a seek happened between the take and the read, an
+     * old frame would be given the new generation and wrongly shown.
+     * </p>
      */
     public long generation() {
         lock.lock();
