@@ -106,3 +106,6 @@ A passing test doesn't prove there are no races, so these are backed up by the r
   with the real grabber, because it needs JavaFX and a video file. Pausing under load is also untested.
 - If building a worker's effect chain throws, that worker dies before it takes a job and nothing reports it.
 - Toggling audio during playback can let one already-decoded chunk of audio through.
+
+## AI Disclaimer
+Hello! I used AI (Claude) to help me with this assignment. It acted as a teacher, and I used it to go back and forth and guide me to first create LTS documentation, then make the changes, and explain what the Java code changes were so I understood why everything was being done. I know I can explain everything that's being done on a conceptual level. I believe this is in line with the course AI use policy.
